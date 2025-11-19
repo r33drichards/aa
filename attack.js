@@ -28,7 +28,7 @@ function createBot() {
     attackEntity()
     attackInterval = setInterval(() => {
       attackEntity()
-    }, 3000)
+    }, 1000)
   })
 
   bot.on('end', (reason) => {
@@ -57,8 +57,20 @@ function attackEntity() {
   const entity = bot.nearestEntity((e) => e.type === 'hostile')
   console.log(`Found mob entity: ${entity ? entity.name || entity.displayName : 'null'}`);
   if (entity) {
-    console.log("Attacking");
-    bot.attack(entity)
+    // Find and equip a sword before attacking
+    const sword = bot.inventory.items().find(item => item.name.includes('sword'))
+    if (sword) {
+      bot.equip(sword, 'hand').then(() => {
+        console.log(`Equipped ${sword.name}`);
+        bot.attack(entity)
+      }).catch(err => {
+        console.log(`Failed to equip sword: ${err.message}`);
+        bot.attack(entity) // Attack anyway
+      })
+    } else {
+      console.log("No sword in inventory, attacking with current item");
+      bot.attack(entity)
+    }
   }
 
   // Only try to sleep at night
