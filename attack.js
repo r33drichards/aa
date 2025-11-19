@@ -28,8 +28,8 @@ function createBot() {
     attackEntity()
     attackInterval = setInterval(() => {
       attackEntity()
-    }, 1000)
-  })
+    }, (parseInt(process.env.ATTACK_INTERVAL, 10) || 5000));
+  });
 
   bot.on('end', (reason) => {
     console.log(`Disconnected: ${reason}. Reconnecting in 5 seconds...`)
