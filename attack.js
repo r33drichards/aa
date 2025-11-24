@@ -4,7 +4,6 @@
  *
  */
 const mineflayer = require('mineflayer')
-const autoEat = require('mineflayer-auto-eat')
 const mineflayerViewer = require('prismarine-viewer').mineflayer
 
 const botOptions = {
@@ -23,8 +22,6 @@ function createBot() {
   bot.on('spawn', () => {
     mineflayerViewer(bot, { port: 3002 })
 
-    bot.loadPlugin(autoEat.loader)
-    bot.autoEat.enableAuto()
     attackEntity()
     attackInterval = setInterval(() => {
       attackEntity()
@@ -46,59 +43,48 @@ function createBot() {
 }
 
 function attackEntity() {
-  if (!bot || !bot.entity) return
-
-  // Diagnostic: Log all nearby entities to understand what's available
-  const allEntities = Object.values(bot.entities)
-  console.log(`Total entities loaded: ${allEntities.length}`)
-  const entityTypes = allEntities.map(e => `${e.type}:${e.name || e.displayName || 'unknown'}`).slice(0, 10)
-  console.log(`Entity types nearby: ${entityTypes.join(', ') || 'none'}`)
-
-  const entity = bot.nearestEntity((e) => e.type === 'hostile')
-  console.log(`Found mob entity: ${entity ? entity.name || entity.displayName : 'null'}`);
-  if (entity) {
-    // Find and equip a sword before attacking
-    const sword = bot.inventory.items().find(item => item.name.includes('sword'))
-    if (sword) {
-      bot.equip(sword, 'hand').then(() => {
-        console.log(`Equipped ${sword.name}`);
-        bot.attack(entity)
-      }).catch(err => {
-        console.log(`Failed to equip sword: ${err.message}`);
-        bot.attack(entity) // Attack anyway
-      })
-    } else {
-      console.log("No sword in inventory, attacking with current item");
-      bot.attack(entity)
-    }
-  }
-
-  // Only try to sleep at night
-  if (bot.time.isDay) {
-    console.log("Skipping sleep - it's daytime")
+  // Check if bot is still connected before attempting any operations
+  if (!bot || !bot.entity || !bot._client || bot._client.ended) {
     return
   }
-  console.log("Sleeping");
-  const beds = bot.findBlocks({
-    matching: bot.registry.blocksByName["white_bed"].id,
-    maxDistance: 128,
-  });
-  beds.forEach(async (bed) => {
-    try {
 
-      // wait 1 second
-      const bedBlock = bot.blockAt(bed);
-      if (bedBlock) {
-        await bot.sleep(bedBlock);
+  try {
+    // Diagnostic: Log all nearby entities to understand what's available
+    const allEntities = Object.values(bot.entities)
+    console.log(`Total entities loaded: ${allEntities.length}`)
+    const entityTypes = allEntities.map(e => `${e.type}:${e.name || e.displayName || 'unknown'}`).slice(0, 10)
+    console.log(`Entity types nearby: ${entityTypes.join(', ') || 'none'}`)
+
+    const entity = bot.nearestEntity((e) => e.type === 'hostile')
+    console.log(`Found mob entity: ${entity ? entity.name || entity.displayName : 'null'}`);
+    if (entity) {
+      // Find and equip a sword before attacking
+      const sword = bot.inventory.items().find(item => item.name.includes('sword'))
+      if (sword) {
+        bot.equip(sword, 'hand').then(() => {
+          // Check again if bot is still connected before attacking
+          if (bot && bot._client && !bot._client.ended) {
+            console.log(`Equipped ${sword.name}`);
+            bot.attack(entity)
+          }
+        }).catch(err => {
+          // Only log non-EPIPE errors or if bot is still connected
+          if (err.code !== 'EPIPE' && bot && bot._client && !bot._client.ended) {
+            console.log(`Failed to equip sword: ${err.message}`);
+            bot.attack(entity) // Attack anyway
+          }
+        })
       } else {
-        console.log("No bed block found");
+        console.log("No sword in inventory, attacking with current item");
+        bot.attack(entity)
       }
-    } catch (e) {
-      console.log("Failed to sleep in bed " + e);
     }
-  });
-
-  console.log("Sleeping done");
+  } catch (err) {
+    // Silently ignore EPIPE errors as they indicate disconnection
+    if (err.code !== 'EPIPE') {
+      console.log(`Error in attackEntity: ${err.message}`)
+    }
+  }
 }
 
 createBot()
